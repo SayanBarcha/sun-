@@ -1,9 +1,9 @@
 html,
-	body {
+body {
 		margin: 0;
 		height: 100%;
 	}
 
-	lume-element3d {
+lume-element3d {
 		padding: 5px;
 	}
