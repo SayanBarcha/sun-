@@ -1,116 +1,108 @@
-varying vec2 vUv;
+import { Motor } from 'lume';
+import {
+    ReinhardToneMapping,
+    Vector2,
+    ShaderMaterial,
+    TextureLoader
+} from 'three';
+import {
+    EffectComposer
+} from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import {
+    RenderPass
+} from 'three/examples/jsm/postprocessing/RenderPass.js';
+import {
+    ShaderPass
+} from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import {
+    UnrealBloomPass
+} from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import {
+    OutputPass
+} from 'three/examples/jsm/postprocessing/OutputPass.js';
 
-	void main() {
+// Create a Motor instance
+const motor = new Motor();
 
-		vUv = uv;
+// Set up the tone mapping
+motor.scene.glRenderer.toneMapping = ReinhardToneMapping;
 
-		gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+// Create bloom composer
+const bloomComposer = new EffectComposer(motor.scene.glRenderer);
+bloomComposer.renderToScreen = false;
 
-	}
-</script>
+// Create final composer
+const finalComposer = new EffectComposer(motor.scene.glRenderer);
 
-<script type="x-shader/x-fragment" id="fragmentshader">
-	uniform sampler2D baseTexture;
-	uniform sampler2D bloomTexture;
+// Create render pass
+const renderPass = new RenderPass(motor.scene, motor.scene.camera);
+finalComposer.addPass(renderPass);
+bloomComposer.addPass(renderPass);
 
-	varying vec2 vUv;
+// Create bloom pass
+const bloomPass = new UnrealBloomPass(new Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+bloomPass.threshold = 0;
+bloomPass.strength = 1;
+bloomPass.radius = 0.5;
+bloomComposer.addPass(bloomPass);
 
-	void main() {
+// Load textures if needed
+const textureLoader = new TextureLoader();
+const baseTexture = textureLoader.load('path_to_base_texture');
+const bloomTexture = textureLoader.load('path_to_bloom_texture');
 
-		gl_FragColor = ( texture2D( baseTexture, vUv ) + vec4( 1.0 ) * texture2D( bloomTexture, vUv ) );
+// Create mix pass
+const mixPass = new ShaderPass(
+    new ShaderMaterial({
+        uniforms: {
+            baseTexture: {
+                value: baseTexture
+            },
+            bloomTexture: {
+                value: bloomComposer.renderTarget2.texture
+            },
+        },
+        vertexShader: document.getElementById('vertexshader').textContent,
+        fragmentShader: document.getElementById('fragmentshader').textContent,
+        defines: {},
+    }),
+    'baseTexture',
+);
+mixPass.needsSwap = true;
+finalComposer.addPass(mixPass);
 
-	}
-</script>
+// Create output pass
+const outputPass = new OutputPass();
+finalComposer.addPass(outputPass);
 
-<script type="module">
-	import {
-		Motor
-	} from 'lume'
-	import {
-		ReinhardToneMapping,
-		Vector2,
-		ShaderMaterial
-	} from 'three'
-	import {
-		EffectComposer
-	} from 'three/addons/postprocessing/EffectComposer.js'
-	import {
-		RenderPass
-	} from 'three/addons/postprocessing/RenderPass.js'
-	import {
-		ShaderPass
-	} from 'three/addons/postprocessing/ShaderPass.js'
-	import {
-		UnrealBloomPass
-	} from 'three/addons/postprocessing/UnrealBloomPass.js'
-	import {
-		OutputPass
-	} from 'three/addons/postprocessing/OutputPass.js'
-	scene.glRenderer.toneMapping = ReinhardToneMapping
-	const bloomComposer = new EffectComposer(scene.glRenderer)
-	bloomComposer.renderToScreen = false
-	const finalComposer = new EffectComposer(scene.glRenderer)
-	const renderPass = new RenderPass(scene.three, scene.threeCamera)
-	finalComposer.addPass(renderPass)
-	bloomComposer.addPass(renderPass)
-	const bloomPass = new UnrealBloomPass(
-		new Vector2(scene.clientWidth, scene.clientHeight),
-		// 1.5, 0.4, 0.85
-	)
-	bloomPass.threshold = 0
-	bloomPass.strength = 1
-	bloomPass.radius = 0.5
-	bloomComposer.addPass(bloomPass)
-	const mixPass = new ShaderPass(
-		new ShaderMaterial({
-			uniforms: {
-				baseTexture: {
-					value: null
-				},
-				bloomTexture: {
-					value: bloomComposer.renderTarget2.texture
-				},
-			},
-			vertexShader: document.getElementById('vertexshader').textContent,
-			fragmentShader: document.getElementById('fragmentshader').textContent,
-			defines: {},
-		}),
-		'baseTexture',
-	)
-	mixPass.needsSwap = true
-	finalComposer.addPass(mixPass)
-	const outputPass = new OutputPass()
-	finalComposer.addPass(outputPass)
+// Handle resizing
+function handleSizing() {
+    finalComposer.setPixelRatio(window.devicePixelRatio);
+    bloomComposer.setPixelRatio(window.devicePixelRatio);
+    finalComposer.setSize(window.innerWidth, window.innerHeight);
+    bloomComposer.setSize(window.innerWidth, window.innerHeight);
+}
 
-	function handleSizing() {
-		finalComposer.setPixelRatio(window.devicePixelRatio)
-		bloomComposer.setPixelRatio(window.devicePixelRatio)
-		const resize = () => {
-			finalComposer.setSize(scene.clientWidth, scene.clientHeight)
-			bloomComposer.setSize(scene.clientWidth, scene.clientHeight)
-		}
-		const observer = new ResizeObserver(resize)
-		observer.observe(scene)
-	}
-	// If you do things manually with Three.js, you need to make sure to set the
-	// proper rendering dimensions. Comment this out and it will still work, but
-	// the demo may be lower resolution and look pixelated.
-	handleSizing()
-	scene.drawScene = () => {
-		// If there are multiple cameras in the Lume scene, make sure to always
-		// use the currently-active camera.
-		renderPass.camera = scene.threeCamera
-		stars.three.material.color.set('black')
-		bloomComposer.render()
-		stars.three.material.color.set('white')
-		finalComposer.render()
-	}
-	const autoRotate = true
-	if (autoRotate) {
-		rig.rotation = (x, y, z) => [x, y - 0.03, z]
-	} else {
-		// TODO When there's no animation, not sure why the scene needs to be
-		// re-drawn a single frame a little *later* for things to become
-		// visible for the first time.
-		setTimeout(() => scene.needsUpdate(), 100)
-	}
+// Draw scene function
+motor.scene.drawScene = () => {
+    renderPass.camera = motor.scene.camera;
+    bloomComposer.render();
+    finalComposer.render();
+};
+
+// Auto rotate
+const autoRotate = true;
+if (autoRotate) {
+    motor.rig.rotation = (x, y, z) => [x, y - 0.03, z];
+} else {
+    setTimeout(() => motor.scene.needsUpdate(), 100);
+}
+
+// Call handle sizing
+handleSizing();
+
+// Start the motor
+motor.start();
+
+// Export motor instance if needed
+export default motor;
